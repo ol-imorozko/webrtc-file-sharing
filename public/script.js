@@ -8,7 +8,7 @@ function logDebug(message, data = null) {
 
 // Get URL parameters
 const params = new URLSearchParams(window.location.search);
-const roomId = params.get('room');
+let roomId = params.get('room'); // Changed const to let
 const isSender = !roomId;
 
 // Elements
@@ -26,7 +26,7 @@ const fileProgress = document.getElementById('fileProgress');
 let peerConnection;
 let dataChannel;
 let receivedBuffers = [];
-let fileMetadata = {};
+let fileMetadata = [];
 
 // Event Listeners
 selectFileBtn.addEventListener('click', () => {
@@ -73,6 +73,7 @@ function createRoom() {
   const newRoomId = Math.random().toString(36).substring(2, 10);
   logDebug('Creating new room', { roomId: newRoomId });
   socket.emit('join', newRoomId);
+  roomId = newRoomId; // Assign newRoomId to roomId
   shareLinkContainer.hidden = false;
   shareLink.value = `${window.location.origin}?room=${newRoomId}`;
   setupPeerConnection();
