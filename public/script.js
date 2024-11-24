@@ -94,7 +94,12 @@ function joinRoom(roomId) {
 // Setup PeerConnection and DataChannel
 function setupPeerConnection() {
   logDebug('Setting up peer connection');
-  peerConnection = new RTCPeerConnection();
+  // Use the global peerConnection variable
+  peerConnection = new RTCPeerConnection({
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+    ],
+  });
 
   // Debug: Track connection state
   peerConnection.onconnectionstatechange = () => {
