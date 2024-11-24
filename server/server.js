@@ -26,7 +26,11 @@ io.on('connection', (socket) => {
     socket.roomId = roomId;
     socket.emit('joined', roomId);
     logDebug('User successfully joined room', { socketId: socket.id, roomId });
+
+    // Notify other peers in the room that a new peer has joined
+    socket.broadcast.to(roomId).emit('peer-joined', { socketId: socket.id });
   });
+
 
   // Relay signaling messages
   socket.on('signal', (data) => {

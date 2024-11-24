@@ -73,6 +73,15 @@ socket.on('signal', async (data) => {
   }
 });
 
+// Notify the sender when a receiver joins
+socket.on('peer-joined', (data) => {
+  logDebug('Peer joined', { data });
+  if (isSender) {
+    // Only the sender needs to handle this event
+    setupPeerConnection();
+  }
+});
+
 // Event Listeners
 selectFileBtn.addEventListener('click', () => {
   logDebug('Select file button clicked');
@@ -121,7 +130,7 @@ function createRoom() {
   roomId = newRoomId; // Assign newRoomId to roomId
   shareLinkContainer.hidden = false;
   shareLink.value = `${window.location.origin}?room=${newRoomId}`;
-  setupPeerConnection();
+  // Do not call setupPeerConnection() here
 }
 
 // Join an existing room
@@ -134,6 +143,7 @@ function joinRoom(roomId) {
   progressContainer.hidden = true;
   progressStatus.textContent = 'Waiting for file...';
 
+  // Receiver sets up peer connection immediately
   setupPeerConnection();
 }
 
@@ -286,6 +296,7 @@ function downloadFile(blob, fileName) {
 // Start the app
 if (isSender) {
   logDebug('App started as sender');
+  // Sender will wait for receiver to join before setting up peer connection
 } else {
   logDebug('App started as receiver');
   joinRoom(roomId);
