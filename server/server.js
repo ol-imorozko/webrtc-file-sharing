@@ -1,7 +1,6 @@
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
-const crypto = require('crypto'); // For generating secure room IDs
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
@@ -9,31 +8,42 @@ const io = socketIo(server);
 // Serve static files from the 'public' directory
 app.use(express.static('../public'));
 
+// Debug log utility
+function logDebug(message, data = null) {
+  const timestamp = new Date().toISOString();
+  console.log(`[DEBUG] ${timestamp} - ${message}`);
+  if (data) console.log(data);
+}
+
 // Socket.IO for signaling
 io.on('connection', (socket) => {
-  console.log('A user connected:', socket.id);
+  logDebug('User connected', { socketId: socket.id });
 
   // User creates or joins a room
-  socket.on('join', (roomId, password) => {
+  socket.on('join', (roomId) => {
+    logDebug('User attempting to join room', { socketId: socket.id, roomId });
     socket.join(roomId);
     socket.roomId = roomId;
-    socket.password = password;
     socket.emit('joined', roomId);
+    logDebug('User successfully joined room', { socketId: socket.id, roomId });
   });
 
   // Relay signaling messages
   socket.on('signal', (data) => {
+    logDebug('Signal received', { sender: socket.id, roomId: data.roomId, type: Object.keys(data).filter((key) => key !== 'roomId') });
     io.to(data.roomId).emit('signal', data);
+    logDebug('Signal relayed to room', { roomId: data.roomId });
   });
 
   // Handle disconnect
   socket.on('disconnect', () => {
-    console.log('A user disconnected:', socket.id);
+    logDebug('User disconnected', { socketId: socket.id, roomId: socket.roomId });
   });
 });
 
 // Start the server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  logDebug(`Server is running on port ${PORT}`);
 });
+

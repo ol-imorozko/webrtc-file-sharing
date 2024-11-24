@@ -1,5 +1,11 @@
 const socket = io();
 
+// Debug log utility
+function logDebug(message, data = null) {
+  console.log(`[DEBUG] ${new Date().toISOString()} - ${message}`);
+  if (data) console.log(data);
+}
+
 // Get URL parameters
 const params = new URLSearchParams(window.location.search);
 const roomId = params.get('room');
@@ -23,13 +29,22 @@ let receivedBuffers = [];
 let fileMetadata = {};
 
 // Event Listeners
-selectFileBtn.addEventListener('click', () => fileInput.click());
+selectFileBtn.addEventListener('click', () => {
+  logDebug('Select file button clicked');
+  fileInput.click();
+});
+
 fileInput.addEventListener('change', handleFileSelect);
-copyLinkBtn.addEventListener('click', copyShareLink);
+
+copyLinkBtn.addEventListener('click', () => {
+  copyShareLink();
+  logDebug('Share link copied to clipboard', { shareLink: shareLink.value });
+});
 
 // Handle file selection
 function handleFileSelect(event) {
   const files = event.target.files;
+  logDebug('File(s) selected', { files });
   if (files.length > 0) {
     displaySelectedFiles(files);
     createRoom();
@@ -43,18 +58,20 @@ function displaySelectedFiles(files) {
     filesList.innerHTML += `<li>${file.name} (${file.size} bytes)</li>`;
   }
   filesList.innerHTML += '</ul>';
+  logDebug('Selected files displayed');
 }
 
 // Copy share link
 function copyShareLink() {
   shareLink.select();
   document.execCommand('copy');
-  alert('Link copied to clipboard!');
+  logDebug('Share link copied');
 }
 
 // Create a new room
 function createRoom() {
   const newRoomId = Math.random().toString(36).substring(2, 10);
+  logDebug('Creating new room', { roomId: newRoomId });
   socket.emit('join', newRoomId);
   shareLinkContainer.hidden = false;
   shareLink.value = `${window.location.origin}?room=${newRoomId}`;
@@ -63,6 +80,7 @@ function createRoom() {
 
 // Join an existing room
 function joinRoom(roomId) {
+  logDebug('Joining existing room', { roomId });
   socket.emit('join', roomId);
   receiveContainer.hidden = false;
   setupPeerConnection();
@@ -70,16 +88,22 @@ function joinRoom(roomId) {
 
 // Setup PeerConnection and DataChannel
 function setupPeerConnection() {
+  logDebug('Setting up peer connection');
   peerConnection = new RTCPeerConnection();
 
   // Data Channel for sender
   if (isSender) {
     dataChannel = peerConnection.createDataChannel('fileTransfer');
     dataChannel.binaryType = 'arraybuffer';
-    dataChannel.onopen = sendFile;
+    dataChannel.onopen = () => {
+      logDebug('Data channel opened');
+      sendFile();
+    };
+    dataChannel.onclose = () => logDebug('Data channel closed');
   } else {
     // Receive Data Channel for receiver
     peerConnection.ondatachannel = (event) => {
+      logDebug('Data channel received', { channel: event.channel.label });
       dataChannel = event.channel;
       dataChannel.binaryType = 'arraybuffer';
       dataChannel.onmessage = receiveMessage;
@@ -89,6 +113,7 @@ function setupPeerConnection() {
   // ICE Candidates
   peerConnection.onicecandidate = (event) => {
     if (event.candidate) {
+      logDebug('ICE candidate generated', { candidate: event.candidate });
       socket.emit('signal', {
         roomId: isSender ? socket.id : roomId,
         candidate: event.candidate,
@@ -98,8 +123,10 @@ function setupPeerConnection() {
 
   // Signaling
   socket.on('signal', async (data) => {
+    logDebug('Signal received', { data });
     if (data.candidate) {
       await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+      logDebug('ICE candidate added');
     }
     if (data.offer) {
       await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
@@ -109,9 +136,11 @@ function setupPeerConnection() {
         roomId: data.roomId,
         answer: answer,
       });
+      logDebug('Answer sent', { answer });
     }
     if (data.answer) {
       await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+      logDebug('Answer received and set');
     }
   });
 
@@ -123,6 +152,7 @@ function setupPeerConnection() {
         roomId: socket.id,
         offer: offer,
       });
+      logDebug('Offer created and sent', { offer });
     });
   }
 }
@@ -137,16 +167,14 @@ function sendFile() {
   progressStatus.textContent = 'Sending...';
 
   const reader = new FileReader();
-  reader.onload = (e) => {
-    sendChunk();
-  };
 
   function sendChunk() {
     const chunk = file.slice(offset, offset + chunkSize);
     reader.readAsArrayBuffer(chunk);
   }
 
-  reader.onloadend = (e) => {
+  reader.onload = (e) => {
+    logDebug('Chunk read', { chunkSize: e.target.result.byteLength });
     dataChannel.send(e.target.result);
     offset += e.target.result.byteLength;
     fileProgress.value = (offset / file.size) * 100;
@@ -156,8 +184,11 @@ function sendFile() {
     } else {
       dataChannel.send(JSON.stringify({ done: true }));
       progressStatus.textContent = 'File sent!';
+      logDebug('File sent completely');
     }
   };
+
+  sendChunk();
 }
 
 // Receive messages
@@ -166,17 +197,20 @@ function receiveMessage(event) {
     const message = JSON.parse(event.data);
     if (message.done) {
       const receivedBlob = new Blob(receivedBuffers);
-      downloadFile(receivedBlob, message.fileName);
+      downloadFile(receivedBlob, fileMetadata.fileName);
       progressStatus.textContent = 'File received!';
+      logDebug('File received completely', { metadata: fileMetadata });
     } else if (message.fileName) {
       fileMetadata = message;
       progressContainer.hidden = false;
       progressStatus.textContent = 'Receiving...';
+      logDebug('File metadata received', { fileMetadata });
     }
   } else {
     receivedBuffers.push(event.data);
     const receivedSize = receivedBuffers.reduce((acc, curr) => acc + curr.byteLength, 0);
     fileProgress.value = (receivedSize / fileMetadata.fileSize) * 100;
+    logDebug('Chunk received', { receivedSize, totalSize: fileMetadata.fileSize });
   }
 }
 
@@ -186,14 +220,13 @@ function downloadFile(blob, fileName) {
   link.href = URL.createObjectURL(blob);
   link.download = fileName;
   link.click();
+  logDebug('File downloaded', { fileName });
 }
 
 // Start the app
 if (isSender) {
-  // Sender's logic
-  console.log('Sender ready');
+  logDebug('App started as sender');
 } else {
-  // Receiver's logic
+  logDebug('App started as receiver');
   joinRoom(roomId);
 }
-
