@@ -30,9 +30,14 @@ io.on('connection', (socket) => {
 
   // Relay signaling messages
   socket.on('signal', (data) => {
-    logDebug('Signal received', { sender: socket.id, roomId: data.roomId, type: Object.keys(data).filter((key) => key !== 'roomId') });
-    io.to(data.roomId).emit('signal', data);
-    logDebug('Signal relayed to room', { roomId: data.roomId });
+    logDebug('Signal received', {
+      sender: socket.id,
+      roomId: data.roomId,
+      type: Object.keys(data).filter((key) => key !== 'roomId'),
+    });
+    // Broadcast to all clients in the room except the sender
+    socket.broadcast.to(data.roomId).emit('signal', data);
+    logDebug('Signal relayed to room (excluding sender)', { roomId: data.roomId });
   });
 
   // Handle disconnect
