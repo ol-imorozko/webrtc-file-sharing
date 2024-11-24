@@ -82,7 +82,12 @@ function createRoom() {
 function joinRoom(roomId) {
   logDebug('Joining existing room', { roomId });
   socket.emit('join', roomId);
+
+  // Update UI for receiver
   receiveContainer.hidden = false;
+  progressContainer.hidden = true;
+  progressStatus.textContent = 'Waiting for file...';
+
   setupPeerConnection();
 }
 
@@ -91,22 +96,30 @@ function setupPeerConnection() {
   logDebug('Setting up peer connection');
   peerConnection = new RTCPeerConnection();
 
+  // Debug: Track connection state
+  peerConnection.onconnectionstatechange = () => {
+    logDebug('Peer connection state changed', { state: peerConnection.connectionState });
+  };
+
   // Data Channel for sender
   if (isSender) {
     dataChannel = peerConnection.createDataChannel('fileTransfer');
     dataChannel.binaryType = 'arraybuffer';
     dataChannel.onopen = () => {
-      logDebug('Data channel opened');
+      logDebug('Data channel opened (sender)');
+      // Start sending the file once the data channel is open
       sendFile();
     };
-    dataChannel.onclose = () => logDebug('Data channel closed');
+    dataChannel.onclose = () => logDebug('Data channel closed (sender)');
   } else {
     // Receive Data Channel for receiver
     peerConnection.ondatachannel = (event) => {
-      logDebug('Data channel received', { channel: event.channel.label });
+      logDebug('Data channel received', { channelLabel: event.channel.label });
       dataChannel = event.channel;
       dataChannel.binaryType = 'arraybuffer';
+      dataChannel.onopen = () => logDebug('Data channel opened (receiver)');
       dataChannel.onmessage = receiveMessage;
+      dataChannel.onclose = () => logDebug('Data channel closed (receiver)');
     };
   }
 
@@ -115,7 +128,7 @@ function setupPeerConnection() {
     if (event.candidate) {
       logDebug('ICE candidate generated', { candidate: event.candidate });
       socket.emit('signal', {
-        roomId: isSender ? socket.id : roomId,
+        roomId: roomId, // Use the correct roomId
         candidate: event.candidate,
       });
     }
@@ -126,21 +139,22 @@ function setupPeerConnection() {
     logDebug('Signal received', { data });
     if (data.candidate) {
       await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-      logDebug('ICE candidate added');
+      logDebug('ICE candidate added', { candidate: data.candidate });
     }
     if (data.offer) {
+      logDebug('Offer received and setting remote description');
       await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
       const answer = await peerConnection.createAnswer();
       await peerConnection.setLocalDescription(answer);
       socket.emit('signal', {
-        roomId: data.roomId,
+        roomId: roomId, // Use the correct roomId
         answer: answer,
       });
-      logDebug('Answer sent', { answer });
+      logDebug('Answer created and sent', { answer });
     }
     if (data.answer) {
+      logDebug('Answer received and setting remote description');
       await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-      logDebug('Answer received and set');
     }
   });
 
@@ -149,7 +163,7 @@ function setupPeerConnection() {
     peerConnection.createOffer().then((offer) => {
       peerConnection.setLocalDescription(offer);
       socket.emit('signal', {
-        roomId: socket.id,
+        roomId: roomId, // Use the correct roomId
         offer: offer,
       });
       logDebug('Offer created and sent', { offer });
@@ -162,6 +176,11 @@ function sendFile() {
   const file = fileInput.files[0];
   const chunkSize = 16384;
   let offset = 0;
+
+  // Send file metadata first
+  const metadata = { fileName: file.name, fileSize: file.size };
+  dataChannel.send(JSON.stringify(metadata));
+  logDebug('File metadata sent', metadata);
 
   progressContainer.hidden = false;
   progressStatus.textContent = 'Sending...';
@@ -182,6 +201,7 @@ function sendFile() {
     if (offset < file.size) {
       sendChunk();
     } else {
+      // Signal end of file transfer
       dataChannel.send(JSON.stringify({ done: true }));
       progressStatus.textContent = 'File sent!';
       logDebug('File sent completely');
@@ -201,9 +221,10 @@ function receiveMessage(event) {
       progressStatus.textContent = 'File received!';
       logDebug('File received completely', { metadata: fileMetadata });
     } else if (message.fileName) {
+      // Update UI with file metadata
       fileMetadata = message;
       progressContainer.hidden = false;
-      progressStatus.textContent = 'Receiving...';
+      progressStatus.textContent = `Receiving file: ${fileMetadata.fileName} (${fileMetadata.fileSize} bytes)`;
       logDebug('File metadata received', { fileMetadata });
     }
   } else {
@@ -230,3 +251,4 @@ if (isSender) {
   logDebug('App started as receiver');
   joinRoom(roomId);
 }
+
