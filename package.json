@@ -1,0 +1,14 @@
+{
+  "name": "webrtc-file-sharing-server",
+  "version": "1.0.0",
+  "description": "WebRTC File Sharing App Server",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "http": "^0.0.1-security",
+    "socket.io": "^4.5.4"
+  }
+}

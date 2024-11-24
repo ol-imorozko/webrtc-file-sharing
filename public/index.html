@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>P2P File Sharing App</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>P2P File Sharing</h1>
+    <div id="fileInputContainer">
+      <input type="file" id="fileInput" hidden multiple>
+      <button id="selectFileBtn">Select File(s)</button>
+    </div>
+    <div id="filesList"></div>
+    <div id="shareLinkContainer" hidden>
+      <p>Share this link:</p>
+      <input type="text" id="shareLink" readonly>
+      <button id="copyLinkBtn">Copy Link</button>
+    </div>
+    <div id="receiveContainer" hidden>
+      <p>Waiting for sender...</p>
+    </div>
+    <div id="progressContainer" hidden>
+      <p id="progressStatus"></p>
+      <progress id="fileProgress" value="0" max="100"></progress>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
