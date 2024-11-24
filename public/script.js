@@ -8,7 +8,7 @@ function logDebug(message, data = null) {
 
 // Get URL parameters
 const params = new URLSearchParams(window.location.search);
-let roomId = params.get('room'); // Changed const to let
+let roomId = params.get('room');
 const isSender = !roomId;
 
 // Elements
@@ -26,7 +26,52 @@ const fileProgress = document.getElementById('fileProgress');
 let peerConnection;
 let dataChannel;
 let receivedBuffers = [];
-let fileMetadata = [];
+let fileMetadata = {};
+
+// Socket event listeners
+socket.on('signal', async (data) => {
+  logDebug('Signal received', { data });
+
+  // Ensure peerConnection is initialized
+  if (!peerConnection) {
+    logDebug('PeerConnection not initialized yet. Waiting...');
+    return;
+  }
+
+  if (data.candidate) {
+    try {
+      await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+      logDebug('ICE candidate added', { candidate: data.candidate });
+    } catch (error) {
+      logDebug('Error adding ICE candidate', { error });
+    }
+  }
+
+  if (data.offer) {
+    try {
+      logDebug('Offer received and setting remote description');
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+      socket.emit('signal', {
+        roomId: roomId,
+        answer: peerConnection.localDescription,
+      });
+      logDebug('Answer created and sent', { answer: peerConnection.localDescription });
+    } catch (error) {
+      logDebug('Error handling offer', { error });
+    }
+  }
+
+  if (data.answer) {
+    try {
+      logDebug('Answer received and setting remote description');
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+    } catch (error) {
+      logDebug('Error setting remote description with answer', { error });
+    }
+  }
+});
 
 // Event Listeners
 selectFileBtn.addEventListener('click', () => {
@@ -95,7 +140,6 @@ function joinRoom(roomId) {
 // Setup PeerConnection and DataChannel
 function setupPeerConnection() {
   logDebug('Setting up peer connection');
-  // Use the global peerConnection variable
   peerConnection = new RTCPeerConnection({
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
@@ -105,6 +149,11 @@ function setupPeerConnection() {
   // Debug: Track connection state
   peerConnection.onconnectionstatechange = () => {
     logDebug('Peer connection state changed', { state: peerConnection.connectionState });
+  };
+
+  // Signaling state change
+  peerConnection.onsignalingstatechange = () => {
+    logDebug('Signaling state changed', { state: peerConnection.signalingState });
   };
 
   // Data Channel for sender
@@ -117,6 +166,7 @@ function setupPeerConnection() {
       sendFile();
     };
     dataChannel.onclose = () => logDebug('Data channel closed (sender)');
+    dataChannel.onerror = (error) => logDebug('Data channel error (sender)', { error });
   } else {
     // Receive Data Channel for receiver
     peerConnection.ondatachannel = (event) => {
@@ -126,6 +176,7 @@ function setupPeerConnection() {
       dataChannel.onopen = () => logDebug('Data channel opened (receiver)');
       dataChannel.onmessage = receiveMessage;
       dataChannel.onclose = () => logDebug('Data channel closed (receiver)');
+      dataChannel.onerror = (error) => logDebug('Data channel error (receiver)', { error });
     };
   }
 
@@ -134,45 +185,23 @@ function setupPeerConnection() {
     if (event.candidate) {
       logDebug('ICE candidate generated', { candidate: event.candidate });
       socket.emit('signal', {
-        roomId: roomId, // Use the correct roomId
+        roomId: roomId,
         candidate: event.candidate,
       });
     }
   };
-
-  // Signaling
-  socket.on('signal', async (data) => {
-    logDebug('Signal received', { data });
-    if (data.candidate) {
-      await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-      logDebug('ICE candidate added', { candidate: data.candidate });
-    }
-    if (data.offer) {
-      logDebug('Offer received and setting remote description');
-      await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
-      const answer = await peerConnection.createAnswer();
-      await peerConnection.setLocalDescription(answer);
-      socket.emit('signal', {
-        roomId: roomId, // Use the correct roomId
-        answer: answer,
-      });
-      logDebug('Answer created and sent', { answer });
-    }
-    if (data.answer) {
-      logDebug('Answer received and setting remote description');
-      await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-    }
-  });
 
   // Create Offer for sender
   if (isSender) {
     peerConnection.createOffer().then((offer) => {
       peerConnection.setLocalDescription(offer);
       socket.emit('signal', {
-        roomId: roomId, // Use the correct roomId
+        roomId: roomId,
         offer: offer,
       });
       logDebug('Offer created and sent', { offer });
+    }).catch((error) => {
+      logDebug('Error creating offer', { error });
     });
   }
 }
@@ -193,11 +222,6 @@ function sendFile() {
 
   const reader = new FileReader();
 
-  function sendChunk() {
-    const chunk = file.slice(offset, offset + chunkSize);
-    reader.readAsArrayBuffer(chunk);
-  }
-
   reader.onload = (e) => {
     logDebug('Chunk read', { chunkSize: e.target.result.byteLength });
     dataChannel.send(e.target.result);
@@ -213,6 +237,15 @@ function sendFile() {
       logDebug('File sent completely');
     }
   };
+
+  reader.onerror = (error) => {
+    logDebug('Error reading file', { error });
+  };
+
+  function sendChunk() {
+    const chunk = file.slice(offset, offset + chunkSize);
+    reader.readAsArrayBuffer(chunk);
+  }
 
   sendChunk();
 }
