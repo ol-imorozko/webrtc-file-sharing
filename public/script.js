@@ -9,7 +9,7 @@ function logDebug(message, data = null) {
 // Get URL parameters
 const params = new URLSearchParams(window.location.search);
 let roomId = params.get('room');
-const isSender = !roomId;
+let isSender = !roomId;
 
 // Elements
 const fileInput = document.getElementById('fileInput');
@@ -22,11 +22,29 @@ const receiveContainer = document.getElementById('receiveContainer');
 const progressContainer = document.getElementById('progressContainer');
 const progressStatus = document.getElementById('progressStatus');
 const fileProgress = document.getElementById('fileProgress');
+const sendFilesBtn = document.getElementById('sendFilesBtn');
 
 let peerConnection;
 let dataChannel;
 let receivedBuffers = [];
 let fileMetadata = {};
+
+// Initialize the UI based on role
+function initializeUI() {
+  if (isSender) {
+    // Show file selection options for sender
+    fileInputContainer.hidden = false;
+    sendFilesContainer.hidden = true;
+    receiveContainer.hidden = true;
+  } else {
+    // Show "Send Files" button for receiver
+    fileInputContainer.hidden = true;
+    sendFilesContainer.hidden = false;
+    receiveContainer.hidden = false;
+    progressContainer.hidden = true;
+    progressStatus.textContent = 'Waiting for file...';
+  }
+}
 
 // Socket event listeners
 socket.on('signal', async (data) => {
@@ -89,6 +107,14 @@ selectFileBtn.addEventListener('click', () => {
 });
 
 fileInput.addEventListener('change', handleFileSelect);
+
+// Switch to sender mode when "Send Files" is clicked
+sendFilesBtn.addEventListener('click', () => {
+  logDebug('Switching to sender mode');
+  isSender = true;
+  initializeUI();
+  roomId = null; // Reset the room ID so a new one can be created
+});
 
 copyLinkBtn.addEventListener('click', () => {
   copyShareLink();
@@ -374,3 +400,5 @@ if (isSender) {
   joinRoom(roomId);
 }
 
+// Initialize the UI based on the initial role
+initializeUI();

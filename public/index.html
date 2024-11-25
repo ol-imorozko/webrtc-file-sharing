@@ -8,9 +8,12 @@
 <body>
   <div class="container">
     <h1>P2P File Sharing</h1>
-    <div id="fileInputContainer">
+    <div id="fileInputContainer" hidden>
       <input type="file" id="fileInput" hidden multiple>
       <button id="selectFileBtn">Select File(s)</button>
+    </div>
+    <div id="sendFilesContainer" hidden>
+      <button id="sendFilesBtn">Send Files</button>
     </div>
     <div id="filesList"></div>
     <div id="shareLinkContainer" hidden>
