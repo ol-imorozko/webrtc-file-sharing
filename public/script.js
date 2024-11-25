@@ -36,6 +36,11 @@ function initializeUI() {
     fileInputContainer.hidden = false;
     sendFilesContainer.hidden = true;
     receiveContainer.hidden = true;
+
+    // Reset progress bar and status
+    progressContainer.hidden = true;
+    progressStatus.textContent = '';
+    fileProgress.value = 0;
   } else {
     // Show "Send Files" button for receiver
     fileInputContainer.hidden = true;
