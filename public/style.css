@@ -17,10 +17,21 @@ h1 {
   color: #4CAF50;
 }
 
-#selectFileBtn, #copyLinkBtn {
+#selectFileBtn, #copyLinkBtn, #acceptBtn, #declineBtn {
   padding: 10px 20px;
   font-size: 16px;
   cursor: pointer;
+  margin: 5px;
+}
+
+#acceptBtn {
+  background-color: #4CAF50;
+  color: white;
+}
+
+#declineBtn {
+  background-color: #f44336;
+  color: white;
 }
 
 #filesList {
@@ -53,5 +64,9 @@ h1 {
 progress {
   width: 100%;
   height: 20px;
+}
+
+#progressStatus {
+  margin-bottom: 10px;
 }
 

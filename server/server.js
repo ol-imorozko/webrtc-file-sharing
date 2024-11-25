@@ -1,8 +1,18 @@
 const express = require('express');
-const http = require('http');
+const https = require('https');
+const fs = require('fs');
 const socketIo = require('socket.io');
+
 const app = express();
-const server = http.createServer(app);
+
+// Path to SSL certificates
+const sslOptions = {
+  key: fs.readFileSync('../server.key'),
+  cert: fs.readFileSync('../server.cert'),
+};
+
+// Create an HTTPS server
+const server = https.createServer(sslOptions, app);
 const io = socketIo(server);
 
 // Serve static files from the 'public' directory
@@ -31,7 +41,6 @@ io.on('connection', (socket) => {
     socket.broadcast.to(roomId).emit('peer-joined', { socketId: socket.id });
   });
 
-
   // Relay signaling messages
   socket.on('signal', (data) => {
     logDebug('Signal received', {
@@ -50,9 +59,9 @@ io.on('connection', (socket) => {
   });
 });
 
-// Start the server
+// Start the server on HTTPS
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  logDebug(`Server is running on port ${PORT}`);
+  logDebug(`Server is running securely on port ${PORT}`);
 });
 
